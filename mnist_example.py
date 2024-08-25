@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-# from opacus import PrivacyEngine
+from opacus import PrivacyEngine
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
@@ -248,15 +248,15 @@ def main():
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
         privacy_engine = None
 
-        # if not args.disable_dp:
-        #     privacy_engine = PrivacyEngine(secure_mode=args.secure_rng)
-        #     model, optimizer, train_loader = privacy_engine.make_private(
-        #         module=model,
-        #         optimizer=optimizer,
-        #         data_loader=train_loader,
-        #         noise_multiplier=args.sigma,
-        #         max_grad_norm=args.max_per_sample_grad_norm,
-        #     )
+        if not args.disable_dp:
+            privacy_engine = PrivacyEngine(secure_mode=args.secure_rng)
+            model, optimizer, train_loader = privacy_engine.make_private(
+                module=model,
+                optimizer=optimizer,
+                data_loader=train_loader,
+                noise_multiplier=args.sigma,
+                max_grad_norm=args.max_per_sample_grad_norm,
+            )
 
         for epoch in range(1, args.epochs + 1):
             train(args, model, device, train_loader, optimizer, privacy_engine, epoch)
