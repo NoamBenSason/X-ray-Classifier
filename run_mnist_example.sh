@@ -10,7 +10,7 @@
 
 cd /cs/labs/tomhope/noam_bs97/advanced_privacy_project
 module load cuda/11.8
-source /cs/labs/tomhope/noam_bs97/anaconda3/etc/profile.d/conda.csh
+source /cs/labs/tomhope/noam_bs97/miniconda3/etc/profile.d/conda.csh
 conda activate privacy_env
 
 export CUDA_HOME="/usr/local/nvidia/cuda/11.8"
