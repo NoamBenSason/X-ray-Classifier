@@ -13,6 +13,4 @@ module load cuda/11.8
 source /cs/labs/tomhope/noam_bs97/miniconda3/etc/profile.d/conda.csh
 conda activate privacy_env
 
-export CUDA_HOME="/usr/local/nvidia/cuda/11.8"
-
 python mnist_example.py --device=cpu --disable-dp --n=20 --lr=.1 -b=240
