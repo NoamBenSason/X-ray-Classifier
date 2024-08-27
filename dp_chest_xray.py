@@ -15,7 +15,7 @@ from torchvision.io import read_image
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
 
-DATA_DIR = "/data/chest_xray/"
+DATA_DIR = "data/chest_xray/"
 
 # class XrayDataset(Dataset):
 #     def __init__(self, train = True,transform=None, target_transform=None):
@@ -249,7 +249,7 @@ def main():
     args = parser.parse_args()
     device = torch.device(args.device)
 
-    print(f"$$ Cirrent working directory: {os.getcwd()}")
+    print(f"$$ Current working directory: {os.getcwd()}")
 
     train_loader = torch.utils.data.DataLoader(
         ImageFolder(DATA_DIR+"train", transform=get_transforms()) ,
