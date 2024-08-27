@@ -249,6 +249,8 @@ def main():
     args = parser.parse_args()
     device = torch.device(args.device)
 
+    print(f"$$ Cirrent working directory: {os.getcwd()}")
+
     train_loader = torch.utils.data.DataLoader(
         ImageFolder(DATA_DIR+"train", transform=get_transforms()) ,
         batch_size=args.batch_size,
