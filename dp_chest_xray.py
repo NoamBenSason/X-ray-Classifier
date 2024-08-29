@@ -14,8 +14,10 @@ import pandas as pd
 from torchvision.io import read_image
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
+import matplotlib.pyplot as plt
 
 DATA_DIR = "data/chest_xray/"
+
 
 # class XrayDataset(Dataset):
 #     def __init__(self, train = True,transform=None, target_transform=None):
@@ -68,27 +70,47 @@ DATA_DIR = "data/chest_xray/"
 #         return image, label
 
 
-class SampleConvNet(nn.Module):
+class DPConvNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 16, 8, 2, padding=3)
-        self.conv2 = nn.Conv2d(16, 32, 4, 2)
-        self.fc1 = nn.Linear(32 * 4 * 4, 32)
-        self.fc2 = nn.Linear(32, 10)
+        self.conv1 = nn.Conv2d(3, 100, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(100, 150, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(150, 200, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(200, 200, kernel_size=3, padding=1)
+        self.conv5 = nn.Conv2d(200, 250, kernel_size=3, padding=1)
+        self.conv6 = nn.Conv2d(250, 250, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(342250, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 16)
+        self.fc4 = nn.Linear(16, 8)
+        self.fc5 = nn.Linear(8, 4)
+        self.dropout = nn.Dropout(0.25)
 
     def forward(self, x):
-        # x of shape [B, 1, 28, 28]
-        x = F.relu(self.conv1(x))  # -> [B, 16, 14, 14]
-        x = F.max_pool2d(x, 2, 1)  # -> [B, 16, 13, 13]
-        x = F.relu(self.conv2(x))  # -> [B, 32, 5, 5]
-        x = F.max_pool2d(x, 2, 1)  # -> [B, 32, 4, 4]
-        x = x.view(-1, 32 * 4 * 4)  # -> [B, 512]
-        x = F.relu(self.fc1(x))  # -> [B, 32]
-        x = self.fc2(x)  # -> [B, 10]
+        # x of shape [B, 3, 300, 300]
+        x = F.relu(self.conv1(x))  # -> [B, 100, 300, 300]
+        x = F.relu(self.conv2(x))  # -> [B, 150, 100, 100]
+        x = F.max_pool2d(x, 2, 2)  # -> [B, 150, 150, 150]
+
+        x = F.relu(self.conv3(x))  # -> [B, 200, 150, 150]
+        x = F.relu(self.conv4(x))  # -> [B, 200, 150, 150]
+        x = F.max_pool2d(x, 2, 2)# -> [B, 200, 75, 75]
+
+        x = F.relu(self.conv5(x))# -> [B, 250, 75, 75]
+        x = F.relu(self.conv6(x))# -> [B, 250, 75, 75]
+        x = F.max_pool2d(x, 2, 2)# -> [B, 250, 37, 37]
+
+        x = torch.flatten(x, start_dim=1)  # -> [B, 342250]
+        x = F.relu(self.fc1(x))  # -> [B, 64]
+        x = F.relu(self.fc2(x))  # -> [B, 32]
+        x = F.relu(self.fc3(x))  # -> [B, 16]
+        x = F.relu(self.fc4(x))  # -> [B, 8]
+        x = self.dropout(x)
+        x = self.fc5(x)  # -> [B, 4]
         return x
 
     def name(self):
-        return "SampleConvNet"
+        return "DPConvNet"
 
 
 def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
@@ -109,7 +131,7 @@ def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
         print(
             f"Train Epoch: {epoch} \t"
             f"Loss: {np.mean(losses):.6f} "
-            f"(ε = {epsilon:.2f}, δ = {args.delta})"
+            f"(ε = {epsilon:.2f}, δ = {args.delta}) privacy budget spent so far"
         )
     else:
         print(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
@@ -147,13 +169,14 @@ def get_transforms():
     train_transform = transforms.Compose([
         # transforms.RandomRotation(10),  # rotate +/- 10 degrees
         # transforms.RandomHorizontalFlip(),  # reverse 50% of images
-        # transforms.Resize(100),  # resize shortest side
+        transforms.Resize((300, 300)),
         # transforms.CenterCrop(100),  # crop longest side
         ToTensor(),
         # transforms.Normalize([0.485, 0.456, 0.406],[0.229, 0.224, 0.225])
     ])
 
     return train_transform
+
 
 def main():
     # Training settings
@@ -249,24 +272,29 @@ def main():
     args = parser.parse_args()
     device = torch.device(args.device)
 
-    print(f"$$ Current working directory: {os.getcwd()}")
-
     train_loader = torch.utils.data.DataLoader(
-        ImageFolder(DATA_DIR+"train", transform=get_transforms()) ,
+        ImageFolder(DATA_DIR + "train", transform=get_transforms()),
         batch_size=args.batch_size,
         num_workers=0,
         pin_memory=True,
+
     )
     test_loader = torch.utils.data.DataLoader(
-        ImageFolder(DATA_DIR+"test", transform=get_transforms()),
+        ImageFolder(DATA_DIR + "test", transform=get_transforms()),
         batch_size=args.test_batch_size,
         shuffle=True,
         num_workers=0,
         pin_memory=True,
+
     )
+
+    # example, _ = ImageFolder(DATA_DIR+"train", transform=get_transforms())[20]
+    # plt.imshow(example.permute(1, 2, 0))
+    # plt.show()
+
     run_results = []
     for _ in range(args.n_runs):
-        model = SampleConvNet().to(device)
+        model = DPConvNet().to(device)
 
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
         privacy_engine = None
