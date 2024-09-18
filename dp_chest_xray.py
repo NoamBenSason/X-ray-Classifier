@@ -344,7 +344,7 @@ def main():
 
         if args.optimizer == 'adam':
             optimizer = optim.Adam(model.parameters(), lr=args.lr)
-        else: # args.optimizer == 'sgd':
+        elif args.optimizer == 'sgd':
             optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
         privacy_engine = None
 
@@ -377,17 +377,11 @@ def main():
             )
         )
     os.makedirs("out", exist_ok=True)
-    os.makedirs("out/results", exist_ok=True)
-    os.makedirs("out/saved_models", exist_ok=True)
     time_str = time.strftime("%Y%m%d-%H%M%S")
+    os.makedirs(f"out/{config_name}_{time_str}", exist_ok=True)
 
-    repro_str = (
-        f"chest_xray_{args.lr}_{args.sigma}_"
-        f"{args.max_per_sample_grad_norm}_{args.batch_size}_{args.epochs}"
-    )
-    torch.save(run_results_test_accuracy, f"out/results/run_results_{config_name}_{time_str}.pt")
 
-    with open(f"out/results/final_results_{config_name}_{time_str}.json", "w") as f:
+    with open(f"out/{config_name}_{time_str}/final_results_{config_name}_{time_str}.json", "w") as f:
         json.dump({
             "config_name": config_name,
             "config": config,
@@ -398,18 +392,11 @@ def main():
             "avg_test_loss": np.mean(run_results_test_loss),
             "avg_test_accuracy": np.mean(run_results_test_accuracy),
             "std_test_accuracy": np.std(run_results_test_accuracy),
-
-        },f)
-
-    train_loss_over_epochs = train_loss_over_epochs.tolist()
-    file_path = f"out/results/train_loss_over_time_{config_name}_{time_str}.json"
-    json.dump(train_loss_over_epochs, codecs.open(file_path, 'w', encoding='utf-8'),
-              separators=(',', ':'),
-              sort_keys=True,
-              indent=4)
+            "run_results_test_accuracy":run_results_test_accuracy
+        },f, indent=2)
 
     if args.save_model:
-        torch.save(model.state_dict(), f"out/saved_models/chest_xray_cnn_{config_name}_{time_str}.pt")
+        torch.save(model.state_dict(), f"out/{config_name}_{time_str}/chest_xray_cnn_{config_name}_{time_str}.pt")
 
 
 if __name__ == "__main__":
