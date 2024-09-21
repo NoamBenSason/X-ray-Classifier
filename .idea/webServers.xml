@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="b7ec1950-a055-4250-9686-abe0cf73cd00" name="river">
+        <fileTransfer rootFolder="/cs/labs/tomhope/noam_bs97/advanced_privacy_project" accessType="SFTP" host="river.cs.huji.ac.il" port="22" sshConfigId="732455e4-1c23-42c2-812a-5df1b1402604" sshConfig="noam_bs97@river.cs.huji.ac.il:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

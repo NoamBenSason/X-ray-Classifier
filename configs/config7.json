@@ -1,0 +1,15 @@
+{"BATCH_SIZE": 64,
+"TEST_BATCH_SIZE": 128,
+"NUM_EPOCHS": 1,
+  "NUM_RUNS": 1,
+  "LR": 0.001,
+  "EPSILON":  19.43,
+  "C":  1.23,
+  "DELTA": 1e-5,
+  "DEVICE": "cuda",
+  "SAVE_MODEL": true,
+  "DISABLE_DP": true,
+ "OPTIMIZER": "adam",
+  "BASIC_TRANSFORM":false,
+  "MODEL_NAME": "cnn"
+}

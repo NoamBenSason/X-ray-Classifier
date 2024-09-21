@@ -19,60 +19,16 @@ from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
 import matplotlib.pyplot as plt
 
+from models import DPConvNet, ViTForClassification
+
 DATA_DIR = "data/chest_xray/"
-
-
-class DPConvNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 100, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(100, 150, kernel_size=3, padding=1)
-
-        self.conv3 = nn.Conv2d(150, 200, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(200, 200, kernel_size=3, padding=1)
-
-        self.conv5 = nn.Conv2d(200, 250, kernel_size=3, padding=1)
-        self.conv6 = nn.Conv2d(250, 250, kernel_size=3, padding=1)
-
-        self.fc1 = nn.Linear(36000, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 16)
-        self.fc4 = nn.Linear(16, 8)
-        self.fc5 = nn.Linear(8, 4)
-        self.dropout = nn.Dropout(0.25)
-
-    def forward(self, x):
-        # x of shape [B, 3, 300, 300]
-        x = F.relu(self.conv1(x))  # -> [B, 100, 300, 300]
-        x = F.relu(self.conv2(x))  # -> [B, 150, 100, 100]
-        x = F.max_pool2d(x, 2, 2)  # -> [B, 150, 150, 150]
-
-        x = F.relu(self.conv3(x))  # -> [B, 200, 150, 150]
-        x = F.relu(self.conv4(x))  # -> [B, 200, 150, 150]
-        x = F.max_pool2d(x, 2, 2)# -> [B, 200, 75, 75]
-
-        x = F.relu(self.conv5(x))# -> [B, 250, 75, 75]
-        x = F.relu(self.conv6(x))# -> [B, 250, 75, 75]
-        x = F.max_pool2d(x, 2, 2)# -> [B, 250, 37, 37]
-
-        x = torch.flatten(x, start_dim=1)  # -> [B, 342250]
-        x = F.relu(self.fc1(x))  # -> [B, 64]
-        x = F.relu(self.fc2(x))  # -> [B, 32]
-        x = F.relu(self.fc3(x))  # -> [B, 16]
-        x = F.relu(self.fc4(x))  # -> [B, 8]
-        x = self.dropout(x)
-        x = self.fc5(x)  # -> [B, 4]
-        return x
-
-    def name(self):
-        return "DPConvNet"
 
 
 def train(config, model, device, train_loader, optimizer, privacy_engine, epoch):
     model.train()
     criterion = nn.CrossEntropyLoss()
     losses = []
-    for _batch_idx, (data, target) in enumerate(tqdm(train_loader)):
+    for _batch_idx, (data, target) in enumerate(tqdm(train_loader, desc="Going over batches")):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -94,31 +50,27 @@ def train(config, model, device, train_loader, optimizer, privacy_engine, epoch)
 
     return avg_train_loss
 
-def test(model, device, test_loader):
+
+def test(model, device, test_loader, split):
     model.eval()
     criterion = nn.CrossEntropyLoss()
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in tqdm(test_loader):
+        batch_n = 1
+        for data, target in tqdm(test_loader, desc="Going over test batches"):
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += criterion(output, target).item()  # sum up batch loss
-            pred = output.argmax(
-                dim=1, keepdim=True
-            )  # get the index of the max log-probability
+            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
+            print(f"Batch {batch_n}, Loss: {test_loss}, correct count: {correct}")
+            batch_n += 1
 
     test_loss /= len(test_loader.dataset)
 
     print(
-        "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
-            test_loss,
-            correct,
-            len(test_loader.dataset),
-            100.0 * correct / len(test_loader.dataset),
-        )
-    )
+        f"\n{split} set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(test_loader.dataset)} ({100.0 * correct / len(test_loader.dataset):.2f})\n")
 
     test_accuracy = correct / len(test_loader.dataset)
     return test_accuracy, test_loss
@@ -143,31 +95,59 @@ def get_transforms(config):
 
     return train_transform
 
-def get_config():
+
+def get_config(dp, model_name):
     sweep_config = {}
     sweep_config['method'] = 'bayes'
     sweep_config['metric'] = {'name': 'avg_test_accuracy', 'goal': 'maximize'}
     param_dict = {
-        'BATCH_SIZE': {'values': [32,64]},
-        'TEST_BATCH_SIZE': {'value': [128]},
-        'NUM_EPOCHS': {'values': [20,25]},
-        'NUM_RUNS': {'value': [1]},
-        "LR": {'distribution': 'uniform', 'min': 0.0001, 'max': 0.05},
-        'SIGMA':{'distribution': 'uniform', 'min': 0.0001, 'max': 0.05}, #todo
-        'C':{'distribution': 'uniform', 'min': 0.0001, 'max': 0.05}, #todo
-        'DELTA':{'distribution': 'uniform', 'min': 0.0001, 'max': 0.05}, #todo
-        'DEVICE':{'value': ["cuda"]},
-        'SAVE_MODEL':{'value': [False]},
-        'SECURE_RNG':{'value': [False]}, #todo
-        'DISABLE_DP':{'values': [True, False]},
-        'OPTIMIZER':{'values': ["sgd", "adam"]},
-        'BASIC_TRANSFORM': {'values': [True, False]},
+        'BATCH_SIZE': {'values': [32, 64]},
+        'TEST_BATCH_SIZE': {'value': 128},
+        # 'NUM_EPOCHS': {'value': 1},
+        'NUM_EPOCHS': {'values': [5, 10]},
+        'NUM_RUNS': {'value': 1},
+        # "LR": {'distribution': 'uniform', 'min': 0.0001, 'max': 0.05}, # todo
+        "LR": {'value': 0.00001},
+        # 'EPSILON':{'value':1.0},
+        'EPSILON': {'distribution': 'uniform', 'min': 0.5, 'max': 20},
+        # 'C':{'value': 1.0},
+        'C': {'distribution': 'uniform', 'min': 0.1, 'max': 2},
+        # 'DELTA':{'value': 1e-05},
+        'DELTA': {'distribution': 'uniform', 'min': 0.0000001, 'max': 0.0001},
+        'DEVICE': {'value': "cuda"},
+        'SAVE_MODEL': {'value': False},
+        'DISABLE_DP': {'value': not dp},
+        'OPTIMIZER': {'value': "adam"},
+        # 'OPTIMIZER':{'values': ["sgd", "adam"]}, # todo
+        # 'BASIC_TRANSFORM': {'values': [True, False]}, # todo
+        'BASIC_TRANSFORM': {'value': False},
+        # 'BASIC_TRANSFORM': {'values': [True, False]}, # todo
+        'MODEL_NAME': {'value': model_name},
     }
+
+    if model_name == "ViTForClassification":
+        param_dict.update({
+            "patch_size": {'value': 4},
+            "hidden_size": {'value': 128},
+            "num_hidden_layers": {'value': 4},
+            "num_attention_heads": {'value': 4},
+            "intermediate_size": {'value': 4 * 48},
+            "hidden_dropout_prob": {'value': 0.0},
+            "attention_probs_dropout_prob": {'value': 0.0},
+            "initializer_range": {'value': 0.02},
+            "image_size": {'value': 100},
+            "num_classes": {'value': 4},
+            "num_channels": {'value': 3},
+            "qkv_bias": {'value': True},
+        })
+
     time_str = time.strftime("%Y%m%d-%H%M%S")
-    sweep_config['name'] = f"DP_CNN_{time_str}"
+    s = "DP" if dp else "no_DP"
+    sweep_config['name'] = f"{model_name}_{s}_{time_str}"
     sweep_config['parameters'] = param_dict
 
     return sweep_config
+
 
 def main(config=None):
     with wandb.init(config=config):
@@ -181,7 +161,8 @@ def main(config=None):
 
         )
         test_loader = torch.utils.data.DataLoader(
-            ImageFolder(DATA_DIR + "test", transform=get_transforms(config)),
+            ImageFolder(DATA_DIR + "test",
+                        transform=get_transforms(config)),  # todo maybe transform without augs?
             batch_size=config["TEST_BATCH_SIZE"],
             shuffle=True,
             num_workers=0,
@@ -198,32 +179,46 @@ def main(config=None):
         run_results_train_loss = []
         run_results_test_loss = []
 
-        train_loss_over_epochs = np.zeros((config["NUM_RUNS"],config["NUM_EPOCHS"]))
+        train_loss_over_epochs = np.zeros((config["NUM_RUNS"], config["NUM_EPOCHS"]))
 
-        for run_i in range(config["NUM_RUNS"]): # number of experiments
-            model = DPConvNet().to(config["DEVICE"])
+        for run_i in range(config["NUM_RUNS"]):  # number of experiments
 
-            if  config["OPTIMIZER"]== 'adam':
+            if config["MODEL_NAME"] == "DPConvNet":
+                model = DPConvNet().to(config["DEVICE"])
+            elif config["MODEL_NAME"] == "ViTForClassification":
+                model = ViTForClassification(config).to(config["DEVICE"])
+
+            if config["OPTIMIZER"] == 'adam':
                 optimizer = optim.Adam(model.parameters(), lr=config["LR"])
             elif config["OPTIMIZER"] == 'sgd':
                 optimizer = optim.SGD(model.parameters(), lr=config["LR"], momentum=0)
             privacy_engine = None
 
             if not config["DISABLE_DP"]:
-                privacy_engine = PrivacyEngine(secure_mode=config["SECURE_RNG"])
-                model, optimizer, train_loader = privacy_engine.make_private(
+                privacy_engine = PrivacyEngine()
+
+                model, optimizer, train_dt = privacy_engine.make_private_with_epsilon(
                     module=model,
                     optimizer=optimizer,
                     data_loader=train_loader,
-                    noise_multiplier=config["SIGMA"],
-                    max_grad_norm=config["C"], # C
+                    max_grad_norm=config["C"],
+                    target_delta=config["DELTA"],
+                    target_epsilon=config["EPSILON"],
+                    epochs=config["NUM_EPOCHS"],
                 )
-            for epoch in range(1,config["NUM_EPOCHS"] + 1):
-                train_loss_mid_train = train(config, model, config["DEVICE"], train_loader, optimizer, privacy_engine, epoch)
-                train_loss_over_epochs[run_i][epoch-1] = train_loss_mid_train
 
-            train_accuracy, train_loss = test(model, config["DEVICE"], train_loader)
-            test_accuracy, test_loss = test(model, config["DEVICE"], test_loader)
+            for epoch in range(1, config["NUM_EPOCHS"] + 1):
+                train_loss_mid_train = train(config, model, config["DEVICE"], train_loader, optimizer, privacy_engine,
+                                             epoch)
+                train_loss_over_epochs[run_i][epoch - 1] = train_loss_mid_train
+                wandb.log({"train_loss": train_loss_mid_train}, step=epoch)
+
+                if epoch % 3 == 0:
+                    test_accuracy, test_loss = test(model, config["DEVICE"], test_loader, split="Test")
+                    wandb.log({"test_accuracy": test_accuracy, "test_loss": test_loss}, step=epoch)
+
+            train_accuracy, train_loss = test(model, config["DEVICE"], train_loader, split="Train")
+            test_accuracy, test_loss = test(model, config["DEVICE"], test_loader, split="Test")
 
             run_results_train_accuracy.append(train_accuracy)
             run_results_train_loss.append(train_loss)
@@ -234,7 +229,8 @@ def main(config=None):
         if len(run_results_test_accuracy) > 1:
             print(
                 "Accuracy averaged over {} runs: {:.2f}% ± {:.2f}%".format(
-                    len(run_results_test_accuracy), np.mean(run_results_test_accuracy) * 100, np.std(run_results_test_accuracy) * 100
+                    len(run_results_test_accuracy), np.mean(run_results_test_accuracy) * 100,
+                                                    np.std(run_results_test_accuracy) * 100
                 )
             )
 
@@ -249,8 +245,35 @@ def main(config=None):
         })
 
 
-
 if __name__ == "__main__":
-    sweep_id = wandb.sweep(get_config(), project="advanced_privacy_project",
-                           entity="noam-bs97")
-    wandb.agent(sweep_id, main, count=1000)
+    # Training settings
+    parser = argparse.ArgumentParser(
+        description="DP with Chest X-ray",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        '--model_name',
+        type=str,
+        default="cnn",
+        help='model name - cnn of vit')
+
+    parser.add_argument(
+        "--disable-dp",
+        action="store_true",
+        default=False,
+        help="Disable privacy training and just train with vanilla SGD",
+    )
+
+    args = parser.parse_args()
+
+    if args.model_name == "vit":
+        official_name = "ViTForClassification"
+    elif args.model_name == "cnn":
+        official_name = "DPConvNet"
+
+    sweep_id = wandb.sweep(get_config(dp=not args.disable_dp, model_name=official_name),
+                           project="advanced_privacy_project",
+                           entity="noambs")
+
+    wandb.agent(sweep_id, main, count=1000, project="advanced_privacy_project", entity="noambs")

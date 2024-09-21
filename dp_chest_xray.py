@@ -10,119 +10,22 @@ from torchvision.datasets import ImageFolder
 from tqdm import tqdm
 import time
 import json
-import codecs
 import os
 import pandas as pd
 from torchvision.io import read_image
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
 import matplotlib.pyplot as plt
+from models import DPConvNet, ViTForClassification
 
 DATA_DIR = "data/chest_xray/"
-
-
-# class XrayDataset(Dataset):
-#     def __init__(self, train = True,transform=None, target_transform=None):
-#         self.train = train
-#         self.img_dir = "/data/chest_xray/train" if train else "/data/chest_xray/test"
-#         self.transform = transform
-#         self.target_transform = target_transform
-#
-#         self.label0_count = 50
-#         self.label1_count = 40
-#         self.label2_count = 30
-#         self.label3_count = 40
-#
-#         self.label0 = "COVID19"
-#         self.label1 = "NORMAL"
-#         self.label2 = "PNEUMONIA"
-#         self.label3 = "TUBERCULOSIS"
-#
-#     def __len__(self):
-#         return len(self.img_labels)
-#
-#     def __getitem__(self, idx):
-#
-#         if idx < self.label1_count:
-#             img_path = os.path.join(self.img_dir,  self.label0)
-#             image = read_image(img_path)
-#             label = 0
-#         elif idx < self.label1_count + self.label2_count:
-#             img_path = os.path.join(self.img_dir, self.label1)
-#             image = read_image(img_path)
-#             label = 1
-#         elif idx < self.label1_count + self.label2_count + self.label3_count:
-#             img_path = os.path.join(self.img_dir,  self.label2)
-#             image = read_image(img_path)
-#             label = 2
-#         else:
-#             img_path = os.path.join(self.img_dir,  self.label3)
-#
-#             files = os.listdir(img_path)
-#
-#             img_path = os.path.join(img_path, )
-#             image = read_image(img_path)
-#             label = 3
-#
-#
-#         if self.transform:
-#             image = self.transform(image)
-#         if self.target_transform:
-#             label = self.target_transform(label)
-#         return image, label
-
-
-class DPConvNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 100, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(100, 150, kernel_size=3, padding=1)
-
-        self.conv3 = nn.Conv2d(150, 200, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(200, 200, kernel_size=3, padding=1)
-
-        self.conv5 = nn.Conv2d(200, 250, kernel_size=3, padding=1)
-        self.conv6 = nn.Conv2d(250, 250, kernel_size=3, padding=1)
-
-        self.fc1 = nn.Linear(36000, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 16)
-        self.fc4 = nn.Linear(16, 8)
-        self.fc5 = nn.Linear(8, 4)
-        self.dropout = nn.Dropout(0.25)
-
-    def forward(self, x):
-        # x of shape [B, 3, 300, 300]
-        x = F.relu(self.conv1(x))  # -> [B, 100, 300, 300]
-        x = F.relu(self.conv2(x))  # -> [B, 150, 100, 100]
-        x = F.max_pool2d(x, 2, 2)  # -> [B, 150, 150, 150]
-
-        x = F.relu(self.conv3(x))  # -> [B, 200, 150, 150]
-        x = F.relu(self.conv4(x))  # -> [B, 200, 150, 150]
-        x = F.max_pool2d(x, 2, 2)# -> [B, 200, 75, 75]
-
-        x = F.relu(self.conv5(x))# -> [B, 250, 75, 75]
-        x = F.relu(self.conv6(x))# -> [B, 250, 75, 75]
-        x = F.max_pool2d(x, 2, 2)# -> [B, 250, 37, 37]
-
-        x = torch.flatten(x, start_dim=1)  # -> [B, 342250]
-        x = F.relu(self.fc1(x))  # -> [B, 64]
-        x = F.relu(self.fc2(x))  # -> [B, 32]
-        x = F.relu(self.fc3(x))  # -> [B, 16]
-        x = F.relu(self.fc4(x))  # -> [B, 8]
-        x = self.dropout(x)
-        x = self.fc5(x)  # -> [B, 4]
-        return x
-
-    def name(self):
-        return "DPConvNet"
 
 
 def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
     model.train()
     criterion = nn.CrossEntropyLoss()
     losses = []
-    for _batch_idx, (data, target) in enumerate(tqdm(train_loader)):
+    for _batch_idx, (data, target) in enumerate(tqdm(train_loader, desc = "Going over batches")):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -130,6 +33,7 @@ def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
+        print(f"Epoch {epoch}, batch {_batch_idx}, Loss: {loss.item()}")
 
     avg_train_loss = np.mean(losses)
     if not args.disable_dp:
@@ -140,16 +44,18 @@ def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
             f"(ε = {epsilon:.2f}, δ = {args.delta}) privacy budget spent so far"
         )
     else:
-        print(f"Train Epoch: {epoch} \t Loss: {avg_train_loss:.6f}")
+        print(f"Train Epoch: {epoch} \t Avg epoch loss: {avg_train_loss:.6f}")
 
     return avg_train_loss
 
-def test(model, device, test_loader):
+
+def test(model, device, test_loader, split):
     model.eval()
     criterion = nn.CrossEntropyLoss()
     test_loss = 0
     correct = 0
     with torch.no_grad():
+        batch_n=1
         for data, target in tqdm(test_loader):
             data, target = data.to(device), target.to(device)
             output = model(data)
@@ -158,40 +64,43 @@ def test(model, device, test_loader):
                 dim=1, keepdim=True
             )  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
+            print(f"Batch {batch_n}, Loss: {test_loss}, correct count: {correct}")
+            batch_n += 1
 
     test_loss /= len(test_loader.dataset)
 
     print(
-        "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
-            test_loss,
-            correct,
-            len(test_loader.dataset),
-            100.0 * correct / len(test_loader.dataset),
-        )
-    )
+        f"\n{split} set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(test_loader.dataset)} ({100.0 * correct / len(test_loader.dataset):.2f})\n")
 
     test_accuracy = correct / len(test_loader.dataset)
     return test_accuracy, test_loss
 
 
-def get_transforms(config):
-    if not config["BASIC_TRANSFORM"]:
-        train_transform = transforms.Compose([
-            transforms.RandomRotation(10),  # rotate +/- 10 degrees
-            transforms.RandomHorizontalFlip(),  # reverse 50% of images
-            transforms.Resize(100),  # resize shortest side
-            transforms.CenterCrop(100),  # crop longest side
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406],
-                                 [0.229, 0.224, 0.225])
-        ])
+def get_transforms(config, split = "train"):
+
+    if split == "train":
+        if not config["BASIC_TRANSFORM"]:
+            transform = transforms.Compose([
+                transforms.RandomRotation(10),  # rotate +/- 10 degrees
+                transforms.RandomHorizontalFlip(),  # reverse 50% of images
+                transforms.Resize(100),  # resize shortest side
+                transforms.CenterCrop(100),  # crop longest side
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406],
+                                     [0.229, 0.224, 0.225])
+            ])
+        else:
+            transform = transforms.Compose([
+                transforms.Resize((100, 100)),
+                ToTensor(),
+            ])
     else:
-        train_transform = transforms.Compose([
+        transform = transforms.Compose([
             transforms.Resize((100, 100)),
             ToTensor(),
         ])
 
-    return train_transform
+    return transform
 
 
 def main():
@@ -251,11 +160,10 @@ def main():
         help="learning rate",
     )
     parser.add_argument(
-        "--sigma",
+        "--epsilon",
         type=float,
-        default=config["SIGMA"],
-        metavar="S",
-        help="Noise multiplier",
+        default=config["EPSILON"],
+        help="epsilon for budget",
     )
     parser.add_argument(
         "-c",
@@ -290,11 +198,18 @@ def main():
         default=config["DISABLE_DP"],
         help="Disable privacy training and just train with vanilla SGD",
     )
+    # parser.add_argument(
+    #     "--secure-rng",
+    #     action="store_true",
+    #     default=config["SECURE_RNG"],
+    #     help="Enable Secure RNG to have trustworthy privacy guarantees. Comes at a performance cost",
+    # )
+
     parser.add_argument(
-        "--secure-rng",
+        "--basic_transform",
         action="store_true",
-        default=config["SECURE_RNG"],
-        help="Enable Secure RNG to have trustworthy privacy guarantees. Comes at a performance cost",
+        default=config["BASIC_TRANSFORM"],
+        help="If to do basic transform or fancy transform",
     )
 
     parser.add_argument(
@@ -304,12 +219,19 @@ def main():
         help='optimizer name')
 
     parser.add_argument(
-        '--basic_transform',
+        '--model_name',
         type=str,
-        default=config["BASIC_TRANSFORM"],
-        help='If to do basic transform or fancy transform')
+        default=config["MODEL_NAME"],
+        help='model name - cnn of vit')
 
     args = parser.parse_args()
+    if args.model_name == "vit":
+        official_model_name = "ViTForClassification"
+    elif args.model_name == "cnn":
+        official_model_name = "DPConvNet"
+
+
+
     device = torch.device(args.device)
 
     train_loader = torch.utils.data.DataLoader(
@@ -320,7 +242,7 @@ def main():
 
     )
     test_loader = torch.utils.data.DataLoader(
-        ImageFolder(DATA_DIR + "test", transform=get_transforms(config)),
+        ImageFolder(DATA_DIR + "test", transform=get_transforms(config, split="test")),
         batch_size=args.test_batch_size,
         shuffle=True,
         num_workers=0,
@@ -337,10 +259,18 @@ def main():
     run_results_train_loss = []
     run_results_test_loss = []
 
-    train_loss_over_epochs = np.zeros((args.n_runs,args.epochs))
+    os.makedirs("out", exist_ok=True)
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    os.makedirs(f"out/{config_name}_{time_str}", exist_ok=True)
 
-    for run_i in range(args.n_runs): # number of experiments
-        model = DPConvNet().to(device)
+    train_loss_over_epochs = np.zeros((args.n_runs, args.epochs))
+
+    for run_i in range(args.n_runs):  # number of experiments
+
+        if official_model_name  == "DPConvNet":
+            model = DPConvNet().to(args.device)
+        elif official_model_name  == "ViTForClassification":
+            model = ViTForClassification(config).to(args.device)
 
         if args.optimizer == 'adam':
             optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -349,20 +279,32 @@ def main():
         privacy_engine = None
 
         if not args.disable_dp:
-            privacy_engine = PrivacyEngine(secure_mode=args.secure_rng)
-            model, optimizer, train_loader = privacy_engine.make_private(
+            privacy_engine = PrivacyEngine()
+
+            model, optimizer, train_dt = privacy_engine.make_private_with_epsilon(
                 module=model,
                 optimizer=optimizer,
                 data_loader=train_loader,
-                noise_multiplier=args.sigma,
-                max_grad_norm=args.max_per_sample_grad_norm, # C
+                max_grad_norm=args.max_grad_norm,
+                target_delta=args.delta,
+                target_epsilon=args.epsilon,
+                epochs=args.epochs,
             )
         for epoch in range(1, args.epochs + 1):
+            print(f"Starting epoch {epoch}")
             train_loss_mid_train = train(args, model, device, train_loader, optimizer, privacy_engine, epoch)
-            train_loss_over_epochs[run_i][epoch-1] = train_loss_mid_train
+            train_loss_over_epochs[run_i][epoch - 1] = train_loss_mid_train
 
-        train_accuracy, train_loss = test(model, device, train_loader)
-        test_accuracy, test_loss = test(model, device, test_loader)
+            if epoch % 3 == 0:
+                test_accuracy, test_loss = test(model, args.device, test_loader, split="Test")
+                print(f"test_accuracy{test_accuracy}, test_loss {test_loss}")
+
+
+        if args.save_model:
+            torch.save(model.state_dict(), f"out/{config_name}_{time_str}/chest_xray_cnn_{config_name}_{time_str}.pt")
+
+        train_accuracy, train_loss = test(model, device, train_loader, split="Train")
+        test_accuracy, test_loss = test(model, device, test_loader, split="Test")
 
         run_results_train_accuracy.append(train_accuracy)
         run_results_train_loss.append(train_loss)
@@ -373,12 +315,10 @@ def main():
     if len(run_results_test_accuracy) > 1:
         print(
             "Accuracy averaged over {} runs: {:.2f}% ± {:.2f}%".format(
-                len(run_results_test_accuracy), np.mean(run_results_test_accuracy) * 100, np.std(run_results_test_accuracy) * 100
+                len(run_results_test_accuracy), np.mean(run_results_test_accuracy) * 100,
+                                                np.std(run_results_test_accuracy) * 100
             )
         )
-    os.makedirs("out", exist_ok=True)
-    time_str = time.strftime("%Y%m%d-%H%M%S")
-    os.makedirs(f"out/{config_name}_{time_str}", exist_ok=True)
 
 
     with open(f"out/{config_name}_{time_str}/final_results_{config_name}_{time_str}.json", "w") as f:
@@ -392,11 +332,10 @@ def main():
             "avg_test_loss": np.mean(run_results_test_loss),
             "avg_test_accuracy": np.mean(run_results_test_accuracy),
             "std_test_accuracy": np.std(run_results_test_accuracy),
-            "run_results_test_accuracy":run_results_test_accuracy
-        },f, indent=2)
+            "run_results_test_accuracy": run_results_test_accuracy
+        }, f, indent=2)
 
-    if args.save_model:
-        torch.save(model.state_dict(), f"out/{config_name}_{time_str}/chest_xray_cnn_{config_name}_{time_str}.pt")
+
 
 
 if __name__ == "__main__":
