@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     )
 
-    model = DPConvNet()
+    model = DPConvNet().to("cuda")
     model.load_state_dict(torch.load(PATH, weights_only=True))
     model.eval()
 

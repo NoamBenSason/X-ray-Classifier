@@ -7,6 +7,6 @@
   "SAVE_MODEL": true,
   "DISABLE_DP": true,
  "OPTIMIZER": "adam",
-  "BASIC_TRANSFORM":false,
+  "BASIC_TRANSFORM":true,
   "MODEL_NAME": "cnn"
 }

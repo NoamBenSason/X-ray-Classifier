@@ -15,4 +15,4 @@ module load cuda/11.8
 source /cs/labs/tomhope/noam_bs97/miniconda3/etc/profile.d/conda.csh
 conda activate privacy_env
 
-python dp_chest_xray.py --config_name "config1"
+python dp_chest_xray.py --config_name "config9" --soft_wandb

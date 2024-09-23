@@ -12,6 +12,7 @@ import time
 import json
 import os
 import pandas as pd
+import wandb
 from torchvision.io import read_image
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
@@ -25,7 +26,7 @@ def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
     model.train()
     criterion = nn.CrossEntropyLoss()
     losses = []
-    for _batch_idx, (data, target) in enumerate(tqdm(train_loader, desc = "Going over batches")):
+    for _batch_idx, (data, target) in enumerate(tqdm(train_loader, desc = f"Going over batches of epoch {epoch}")):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -64,7 +65,7 @@ def test(model, device, test_loader, split):
                 dim=1, keepdim=True
             )  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
-            print(f"Batch {batch_n}, Loss: {test_loss}, correct count: {correct}")
+            print(f"Eval {split}: Batch {batch_n}, {split} Loss: {test_loss}, correct count: {correct}")
             batch_n += 1
 
     test_loss /= len(test_loader.dataset)
@@ -93,11 +94,15 @@ def get_transforms(config, split = "train"):
             transform = transforms.Compose([
                 transforms.Resize((100, 100)),
                 ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406],
+                                     [0.229, 0.224, 0.225])
             ])
     else:
         transform = transforms.Compose([
             transforms.Resize((100, 100)),
             ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])
         ])
 
     return transform
@@ -114,6 +119,14 @@ def main():
     )
 
     parser.add_argument('--config_name', type=str, help='config name')
+
+    parser.add_argument(
+        "--soft_wandb",
+        action="store_true",
+        default=False,
+        help="If to lof this run on wandb (soft = fixed parameters)",
+    )
+
 
     args = parser.parse_args()
     config_name = args.config_name
@@ -159,27 +172,8 @@ def main():
         metavar="LR",
         help="learning rate",
     )
-    parser.add_argument(
-        "--epsilon",
-        type=float,
-        default=config["EPSILON"],
-        help="epsilon for budget",
-    )
-    parser.add_argument(
-        "-c",
-        "--max-per-sample-grad_norm",
-        type=float,
-        default=config["C"],
-        metavar="C",
-        help="Clip per-sample gradients to this norm",
-    )
-    parser.add_argument(
-        "--delta",
-        type=float,
-        default=config["DELTA"],
-        metavar="D",
-        help="Target delta",
-    )
+
+
     parser.add_argument(
         "--device",
         type=str,
@@ -225,6 +219,32 @@ def main():
         help='model name - cnn of vit')
 
     args = parser.parse_args()
+
+    if not args.disable_dp:
+        parser.add_argument(
+            "--epsilon",
+            type=float,
+            default=config["EPSILON"],
+            help="epsilon for budget",
+        )
+        parser.add_argument(
+            "-c",
+            "--max-per-sample-grad_norm",
+            type=float,
+            default=config["C"],
+            metavar="C",
+            help="Clip per-sample gradients to this norm",
+        )
+        parser.add_argument(
+            "--delta",
+            type=float,
+            default=config["DELTA"],
+            metavar="D",
+            help="Target delta",
+        )
+
+        args = parser.parse_args()
+
     if args.model_name == "vit":
         official_model_name = "ViTForClassification"
     elif args.model_name == "cnn":
@@ -234,11 +254,21 @@ def main():
 
     device = torch.device(args.device)
 
+    if args.soft_wandb:
+        wandb.login()
+        run = wandb.init(
+            project="advanced_privacy_project",
+            entity="noambs",
+            config=config,
+            group = args.model_name
+        )
+
     train_loader = torch.utils.data.DataLoader(
         ImageFolder(DATA_DIR + "train", transform=get_transforms(config)),
         batch_size=args.batch_size,
         num_workers=0,
         pin_memory=True,
+        shuffle=True
 
     )
     test_loader = torch.utils.data.DataLoader(
@@ -281,11 +311,11 @@ def main():
         if not args.disable_dp:
             privacy_engine = PrivacyEngine()
 
-            model, optimizer, train_dt = privacy_engine.make_private_with_epsilon(
+            model, optimizer, train_loader = privacy_engine.make_private_with_epsilon(
                 module=model,
                 optimizer=optimizer,
                 data_loader=train_loader,
-                max_grad_norm=args.max_grad_norm,
+                max_grad_norm=args.max_per_sample_grad_norm,
                 target_delta=args.delta,
                 target_epsilon=args.epsilon,
                 epochs=args.epochs,
@@ -301,7 +331,7 @@ def main():
 
 
         if args.save_model:
-            torch.save(model.state_dict(), f"out/{config_name}_{time_str}/chest_xray_cnn_{config_name}_{time_str}.pt")
+            torch.save(model.state_dict(), f"out/{config_name}_{time_str}/chest_xray_{args.model_name}_{config_name}_{time_str}.pt")
 
         train_accuracy, train_loss = test(model, device, train_loader, split="Train")
         test_accuracy, test_loss = test(model, device, test_loader, split="Test")
@@ -320,6 +350,17 @@ def main():
             )
         )
 
+    if args.soft_wandb:
+        wandb.log({
+            "config_name": config_name,
+            "avg_train_loss": np.mean(run_results_train_loss),
+            "avg_train_accuracy": np.mean(run_results_train_accuracy),
+            "std_train_accuracy": np.std(run_results_train_accuracy),
+
+            "avg_test_loss": np.mean(run_results_test_loss),
+            "avg_test_accuracy": np.mean(run_results_test_accuracy),
+            "std_test_accuracy": np.std(run_results_test_accuracy),
+        })
 
     with open(f"out/{config_name}_{time_str}/final_results_{config_name}_{time_str}.json", "w") as f:
         json.dump({
