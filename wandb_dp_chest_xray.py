@@ -84,10 +84,10 @@ def test(model, device, test_loader, split, privacy_engine,config):
 
 def get_config(dp, model_name):
     sweep_config = {}
-    sweep_config['method'] = 'random' if dp else "bayes"
+    sweep_config['method'] = 'grid' if dp else "bayes"
     sweep_config['metric'] = {'name': 'avg_test_accuracy', 'goal': 'maximize'}
     param_dict = {
-        'BATCH_SIZE': {'value': 32},
+        'BATCH_SIZE': {'value': 32 if model_name == "vit" else 64},
         # 'BATCH_SIZE': {'values': [32, 64]},
         'TEST_BATCH_SIZE': {'value': 128},
         'NUM_EPOCHS': {'value': 10},
@@ -96,7 +96,7 @@ def get_config(dp, model_name):
         # "LR": {'distribution': 'uniform', 'min': 0.0001, 'max': 0.005},
         # "LR": {'value': 0.00001},
         # "LR": {'values': [0.00001, 0.0001, 0.001]},
-        "LR": {'values': [0.000001, 0.00001]},
+        "LR": {'value': 0.00001 if model_name == "vit" else 0.001},
         'DEVICE': {'value': "cuda"},
         'SAVE_MODEL': {'value': False},
         'DISABLE_DP': {'value': not dp},
@@ -127,11 +127,14 @@ def get_config(dp, model_name):
     if dp:
         param_dict.update({
             # 'EPSILON':{'value':1.0},
-            'EPSILON': {'distribution': 'uniform', 'min': 0.5, 'max': 20},
+            # 'EPSILON': {'distribution': 'uniform', 'min': 0.5, 'max': 20},
+            'EPSILON': {'values': [0.25,0.5,1,3,8,12,20]},
             # 'C':{'value': 1.0},
-            'C': {'distribution': 'uniform', 'min': 0.1, 'max': 2},
+            # 'C': {'distribution': 'uniform', 'min': 0.1, 'max': 2},
+            'C': {'values': [0.25,0.5,1,2,3]},
             # 'DELTA':{'value': 1e-05},
-            'DELTA': {'distribution': 'uniform', 'min': 0.0000001, 'max': 0.0001},
+            # 'DELTA': {'distribution': 'uniform', 'min': 0.0000001, 'max': 0.0001},
+            'DELTA': {'values': [0.001,0.0001,0.00001,0.000001]},
         })
 
     time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -221,9 +224,9 @@ def main(config=None):
                 train_loss_over_epochs[run_i][epoch - 1] = train_loss_mid_train
                 wandb.log({"train_loss": train_loss_mid_train}, step=epoch)
 
-                if epoch % 3 == 0:
-                    test_accuracy, test_loss = test(model, config["DEVICE"], test_loader, split="Test",privacy_engine=privacy_engine,config=config)
-                    wandb.log({"test_accuracy": test_accuracy, "test_loss": test_loss}, step=epoch)
+                # if epoch % 3 == 0:
+                #     test_accuracy, test_loss = test(model, config["DEVICE"], test_loader, split="Test",privacy_engine=privacy_engine,config=config)
+                #     wandb.log({"test_accuracy": test_accuracy, "test_loss": test_loss}, step=epoch)
 
 
 
