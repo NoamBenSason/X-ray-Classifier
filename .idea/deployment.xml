@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="noam_bs97@drape-03.cs.huji.ac.il:22" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="noam_bs97@firth-01.cs.huji.ac.il:22" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="noam_bs97@drape-03.cs.huji.ac.il:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/cs/labs/tomhope/noam_bs97/advanced_privacy_project" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="noam_bs97@firth-01.cs.huji.ac.il:22">
         <serverdata>
           <mappings>
             <mapping deploy="/cs/labs/tomhope/noam_bs97/advanced_privacy_project" local="$PROJECT_DIR$" />

@@ -1,26 +1,16 @@
 import argparse
+import time
+import os
+import wandb
+from tqdm import tqdm
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from opacus import PrivacyEngine
-from torchvision import datasets, transforms
 from torchvision.datasets import ImageFolder
-from tqdm import tqdm
-import time
-import json
-import codecs
-import os
-import wandb
-import pandas as pd
-from torchvision.io import read_image
-from torch.utils.data import Dataset
-from torchvision.transforms import ToTensor
-import matplotlib.pyplot as plt
+from opacus import PrivacyEngine
 
 from dp_chest_xray import get_transforms
-
 from models import DPConvNet, ViTForClassification
 
 DATA_DIR = "data/chest_xray/"
@@ -88,21 +78,14 @@ def get_config(dp, model_name):
     sweep_config['metric'] = {'name': 'avg_test_accuracy', 'goal': 'maximize'}
     param_dict = {
         'BATCH_SIZE': {'value': 32 if model_name == "vit" else 64},
-        # 'BATCH_SIZE': {'values': [32, 64]},
         'TEST_BATCH_SIZE': {'value': 128},
         'NUM_EPOCHS': {'value': 10},
-        # 'NUM_EPOCHS': {'values': [5, 10]},
         'NUM_RUNS': {'value': 1},
-        # "LR": {'distribution': 'uniform', 'min': 0.0001, 'max': 0.005},
-        # "LR": {'value': 0.00001},
-        # "LR": {'values': [0.00001, 0.0001, 0.001]},
         "LR": {'value': 0.00001 if model_name == "vit" else 0.001},
         'DEVICE': {'value': "cuda"},
         'SAVE_MODEL': {'value': False},
         'DISABLE_DP': {'value': not dp},
         'OPTIMIZER': {'value': "adam"},
-        # 'OPTIMIZER':{'values': ["sgd", "adam"]},
-        # 'BASIC_TRANSFORM': {'values': [True, False]},
         'BASIC_TRANSFORM': {'value': True},
         'MODEL_NAME': {'value': model_name},
     }
@@ -112,7 +95,6 @@ def get_config(dp, model_name):
             "patch_size": {'value': 4},
             "hidden_size": {'value': 128},
             "num_hidden_layers": {'value': 4},
-            # "num_attention_heads": {'values': [4,6]},
             "num_attention_heads": {'value': 6},
             "intermediate_size": {'value': 4 * 128},
             "hidden_dropout_prob": {'value': 0.0},
@@ -126,14 +108,9 @@ def get_config(dp, model_name):
 
     if dp:
         param_dict.update({
-            # 'EPSILON':{'value':1.0},
-            # 'EPSILON': {'distribution': 'uniform', 'min': 0.5, 'max': 20},
+
             'EPSILON': {'values': [0.25,0.5,1,3,8,12,20]},
-            # 'C':{'value': 1.0},
-            # 'C': {'distribution': 'uniform', 'min': 0.1, 'max': 2},
             'C': {'values': [0.25,0.5,1,2,3]},
-            # 'DELTA':{'value': 1e-05},
-            # 'DELTA': {'distribution': 'uniform', 'min': 0.0000001, 'max': 0.0001},
             'DELTA': {'values': [0.001,0.0001,0.00001,0.000001]},
         })
 
@@ -148,6 +125,7 @@ def get_config(dp, model_name):
 def main(config=None):
     with wandb.init(config=config):
         config = wandb.config
+        config["DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
 
         train_loader = torch.utils.data.DataLoader(
             ImageFolder(DATA_DIR + "train", transform=get_transforms(config, split="train")),
@@ -166,10 +144,6 @@ def main(config=None):
             pin_memory=True,
 
         )
-
-        # example, _ = ImageFolder(DATA_DIR+"train", transform=get_transforms(config))[20]
-        # plt.imshow(example.permute(1, 2, 0))
-        # plt.show()
 
         run_results_train_accuracy = []
         run_results_test_accuracy = []
@@ -224,12 +198,6 @@ def main(config=None):
                 train_loss_over_epochs[run_i][epoch - 1] = train_loss_mid_train
                 wandb.log({"train_loss": train_loss_mid_train}, step=epoch)
 
-                # if epoch % 3 == 0:
-                #     test_accuracy, test_loss = test(model, config["DEVICE"], test_loader, split="Test",privacy_engine=privacy_engine,config=config)
-                #     wandb.log({"test_accuracy": test_accuracy, "test_loss": test_loss}, step=epoch)
-
-
-
             if config["SAVE_MODEL"]:
                 os.makedirs("out", exist_ok=True)
                 time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -267,7 +235,6 @@ def main(config=None):
 
 
 if __name__ == "__main__":
-    # Training settings
     parser = argparse.ArgumentParser(
         description="DP with Chest X-ray",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

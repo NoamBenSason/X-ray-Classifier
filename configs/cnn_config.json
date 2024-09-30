@@ -1,0 +1,13 @@
+{
+  "MODEL_NAME": "cnn",
+  "BATCH_SIZE": 64,
+  "TEST_BATCH_SIZE": 128,
+  "NUM_EPOCHS": 10,
+  "NUM_RUNS": 1,
+  "LR": 0.001,
+  "SAVE_MODEL": false,
+  "DISABLE_DP": false,
+  "OPTIMIZER": "adam",
+  "BASIC_TRANSFORM":true,
+
+}

@@ -1,20 +1,26 @@
 import argparse
 import numpy as np
-from tqdm import tqdm
-import time
-import json
-import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from opacus import PrivacyEngine
 from torchvision import datasets, transforms
 from torchvision.datasets import ImageFolder
+from tqdm import tqdm
+import time
+import json
+import os
+import pandas as pd
+import wandb
+from torchvision.io import read_image
+from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
-
+import matplotlib.pyplot as plt
 from models import DPConvNet, ViTForClassification
 
 DATA_DIR = "data/chest_xray/"
+
 
 def train(args, model, device, train_loader, optimizer, privacy_engine, epoch):
     model.train()
@@ -103,24 +109,23 @@ def get_transforms(config, split = "train"):
 
 
 def main():
+    # python dp_chest_xray.py - -device = cuda - n = 10 - -lr = 0.001 - -sigma = 1.3 - c = 1.5 - b = 16
+    print("DP with Chest X-ray")
+
+    # Training settings
     parser = argparse.ArgumentParser(
         description="DP with Chest X-ray",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    parser.add_argument(
-        '--model_name',
-        type=str,
-        default=config["MODEL_NAME"],
-        help='model name - cnn of vit')
-
-    args = parser.parse_args()
+    parser.add_argument('--config_name', type=str, help='config name')
 
     parser.add_argument(
-        '--config_name',
-        type=str,
-        help='config name',
-        default= f"{args.config_name}_config")
+        "--soft_wandb",
+        action="store_true",
+        default=False,
+        help="If to lof this run on wandb (soft = fixed parameters)",
+    )
 
 
     args = parser.parse_args()
@@ -168,10 +173,11 @@ def main():
         help="learning rate",
     )
 
+
     parser.add_argument(
         "--device",
         type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
+        default=config["DEVICE"],
         help="GPU ID for this process",
     )
     parser.add_argument(
@@ -186,6 +192,12 @@ def main():
         default=config["DISABLE_DP"],
         help="Disable privacy training and just train with vanilla SGD",
     )
+    # parser.add_argument(
+    #     "--secure-rng",
+    #     action="store_true",
+    #     default=config["SECURE_RNG"],
+    #     help="Enable Secure RNG to have trustworthy privacy guarantees. Comes at a performance cost",
+    # )
 
     parser.add_argument(
         "--basic_transform",
@@ -200,7 +212,11 @@ def main():
         default=config["OPTIMIZER"],
         help='optimizer name')
 
-
+    parser.add_argument(
+        '--model_name',
+        type=str,
+        default=config["MODEL_NAME"],
+        help='model name - cnn of vit')
 
     args = parser.parse_args()
 
@@ -238,6 +254,14 @@ def main():
 
     device = torch.device(args.device)
 
+    if args.soft_wandb:
+        wandb.login()
+        run = wandb.init(
+            project="advanced_privacy_project",
+            entity="noambs",
+            config=config,
+            group = args.model_name
+        )
 
     train_loader = torch.utils.data.DataLoader(
         ImageFolder(DATA_DIR + "train", transform=get_transforms(config)),
@@ -255,6 +279,10 @@ def main():
         pin_memory=True,
 
     )
+
+    # example, _ = ImageFolder(DATA_DIR+"train", transform=get_transforms(config))[20]
+    # plt.imshow(example.permute(1, 2, 0))
+    # plt.show()
 
     run_results_train_accuracy = []
     run_results_test_accuracy = []
@@ -297,6 +325,10 @@ def main():
             train_loss_mid_train = train(args, model, device, train_loader, optimizer, privacy_engine, epoch)
             train_loss_over_epochs[run_i][epoch - 1] = train_loss_mid_train
 
+            if epoch % 3 == 0:
+                test_accuracy, test_loss = test(model, args.device, test_loader, split="Test")
+                print(f"test_accuracy{test_accuracy}, test_loss {test_loss}")
+
 
         if args.save_model:
             torch.save(model.state_dict(), f"out/{config_name}_{time_str}/chest_xray_{args.model_name}_{config_name}_{time_str}.pt")
@@ -318,6 +350,17 @@ def main():
             )
         )
 
+    if args.soft_wandb:
+        wandb.log({
+            "config_name": config_name,
+            "avg_train_loss": np.mean(run_results_train_loss),
+            "avg_train_accuracy": np.mean(run_results_train_accuracy),
+            "std_train_accuracy": np.std(run_results_train_accuracy),
+
+            "avg_test_loss": np.mean(run_results_test_loss),
+            "avg_test_accuracy": np.mean(run_results_test_accuracy),
+            "std_test_accuracy": np.std(run_results_test_accuracy),
+        })
 
     with open(f"out/{config_name}_{time_str}/final_results_{config_name}_{time_str}.json", "w") as f:
         json.dump({
