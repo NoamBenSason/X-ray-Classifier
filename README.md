@@ -9,6 +9,7 @@ instructions on how to run the models with wandb (this was done with a different
 ## Preparing the project:
 
 1. Download the project directory to the computer.
+2. Please make sure your python version is 3.9.2.
 2. Create a virtual environment: `virtualenv dpvenv`
 2. Activate the virtual environment:  `source dpvenv/bin/activate.csh`
 3. Install all packages required: `pip install -r requirements.txt`
@@ -22,6 +23,12 @@ https://www.kaggle.com/datasets/jtiptj/chest-xray-pneumoniacovid19tuberculosis/d
 If you want to download the data using a command line, you can follow the instructions here, using the dataset's source and name `jtiptj/chest-xray-pneumoniacovid19tuberculosis`:
 https://www.endtoend.ai/tutorial/how-to-download-kaggle-datasets-on-ubuntu/
 
+After all the files are downloaded, please make sure all the data is in a folder named 'data', and all the splits of the data is in a folder inside it named 'chest_xray` (example below).
+This folder should be in the project's directory, and the hierarchy need to be like this:
+
+advanced_privacy_project/data/chest_xray/train
+advanced_privacy_project/data/chest_xray/val
+advanced_privacy_project/data/chest_xray/test
 
 ## Recurses: 
 
@@ -43,7 +50,7 @@ To train and evaluate the model there are 2 options:
 where `config_name` can be either "cnn_config" or "vit_config". Those existing configs includes the default
 training hyperparameters for each model.
 
-2. `python dp_chest_xray.py --model_name <model_name> --batch-size <batch_size>" --test-batch-size <test_batch_size> --epochs <epoches_num> --lr <learning_rate> ----save-model --disable-dp --optimizer <optimizer_type> --epsilon <epsilon> -c <C> --delta <delta>`
+2. `python dp_chest_xray.py --model_name <model_name> --batch-size <batch_size> --test-batch-size <test_batch_size> --epochs <epoches_num> --lr <learning_rate> ----save-model --disable-dp --optimizer <optimizer_type> --epsilon <epsilon> -c <C> --delta <delta>`
 
    1. --model_name: The name of the model to train & evaluate. Can be "cnn" or "vit".
    2. --batch-size: The batch size to use in training time
