@@ -108,19 +108,13 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    parser.add_argument(
-        '--model_name',
-        type=str,
-        default=config["MODEL_NAME"],
-        help='model name - cnn of vit')
 
-    args = parser.parse_args()
 
     parser.add_argument(
         '--config_name',
         type=str,
         help='config name',
-        default= f"{args.config_name}_config")
+    )
 
 
     args = parser.parse_args()
@@ -128,6 +122,12 @@ def main():
 
     with open(f"configs/{config_name}.json") as f:
         config = json.load(f)
+
+    parser.add_argument(
+        '--model_name',
+        type=str,
+        default=config["MODEL_NAME"],
+        help='model name - cnn of vit')
 
     parser.add_argument(
         "-b",

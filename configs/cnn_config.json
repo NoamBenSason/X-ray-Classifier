@@ -5,9 +5,11 @@
   "NUM_EPOCHS": 10,
   "NUM_RUNS": 1,
   "LR": 0.001,
+  "EPSILON": 12,
+  "DELTA": 0.00001,
+  "C": 1,
   "SAVE_MODEL": false,
   "DISABLE_DP": false,
   "OPTIMIZER": "adam",
-  "BASIC_TRANSFORM":true,
-
+  "BASIC_TRANSFORM":true
 }

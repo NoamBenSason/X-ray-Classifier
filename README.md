@@ -27,7 +27,9 @@ After all the files are downloaded, please make sure all the data is in a folder
 This folder should be in the project's directory, and the hierarchy need to be like this:
 
 advanced_privacy_project/data/chest_xray/train
+
 advanced_privacy_project/data/chest_xray/val
+
 advanced_privacy_project/data/chest_xray/test
 
 ## Recurses: 
