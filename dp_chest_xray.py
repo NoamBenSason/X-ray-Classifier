@@ -117,7 +117,7 @@ def main():
     )
 
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     config_name = args.config_name
 
     with open(f"configs/{config_name}.json") as f:
@@ -202,7 +202,7 @@ def main():
 
 
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     if not args.disable_dp:
         parser.add_argument(
@@ -227,7 +227,7 @@ def main():
             help="Target delta",
         )
 
-        args = parser.parse_args()
+        args, _ = parser.parse_known_args()
 
     if args.model_name == "vit":
         official_model_name = "ViTForClassification"

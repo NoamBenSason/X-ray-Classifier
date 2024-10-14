@@ -52,9 +52,9 @@ To train and evaluate the model there are 2 options:
 where `config_name` can be either "cnn_config" or "vit_config". Those existing configs includes the default
 training hyperparameters for each model.
 
-2. `python dp_chest_xray.py --model_name <model_name> --batch-size <batch_size> --test-batch-size <test_batch_size> --epochs <epoches_num> --lr <learning_rate> ----save-model --disable-dp --optimizer <optimizer_type> --epsilon <epsilon> -c <C> --delta <delta>`
+2. `python dp_chest_xray.py --config_name "<config_name>" --model_name <model_name> --batch-size <batch_size> --test-batch-size <test_batch_size> --epochs <epoches_num> --lr <learning_rate> ----save-model --disable-dp --optimizer <optimizer_type> --epsilon <epsilon> -c <C> --delta <delta>`
 
-   1. --model_name: The name of the model to train & evaluate. Can be "cnn" or "vit".
+   1. --model_name: The name of the model to train & evaluate. Can be "cnn" or "vit". This argument needs to match 'config_name', as this config contains the default parameters.
    2. --batch-size: The batch size to use in training time
    3. --test-batch-size: The batch size to use in evaluation time
    4. --epochs: Number of epochs to train on
