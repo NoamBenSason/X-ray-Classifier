@@ -1,5 +1,19 @@
-# Advanced Topics in Online Privacy and Cyber-security (67515) - Final Project
-### Noam Ben Sason - 318505260
+# Exploring the effect of differential privacy on different model architectures for  X-ray classification
+### Noam Ben Sason
+
+
+This project includes training, evaluating and comparing between 2 model types,
+based on 2 different architectures - CNN (convolution based) and ViT (transformer
+based) for X-ray classification. In particular, I am interested in exploring the effect of adding
+differential privacy to both of them, and to check if defining a privacy budget ”hurts” one
+architecture more than the other, and how different architecture influence the
+budget we can define without hurting the utility (for example - do we have to
+define a smaller budget for one architecture to keep up with the utility of the
+other architecture?).
+
+The dataset consists of  Chest X-Ray images, that were made for
+a classification task on different medical conditions (Pneumonia, Covid-19,Tuberculosis, or
+no disease). The full dataset can be found here: https://www.kaggle.com/datasets/jtiptj/chest-xray-pneumoniacovid19tuberculosis/data.
 
 This is an instruction file on how to train and evaluate the project's models on a university computer. 
 This includes the CNN model and the ViT model, both with or without differential privacy.
